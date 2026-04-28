@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FF Overlay - Precision Adjust with Score</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@600&display=swap');
+
+        :root { --neon: #00ff41; }
+
+        body {
+            margin: 0; padding: 0;
+            background: #0f0f0f;
+            color: white;
+            font-family: 'Rajdhani', sans-serif;
+        }
+
+        /* --- UI GENERATOR --- */
+        #generator-ui { padding: 20px; max-width: 500px; margin: auto; }
+        .card { background: #1a1a1a; padding: 20px; border-radius: 12px; border: 1px solid #333; }
+        input[type="text"], input[type="file"], input[type="range"] {
+            width: 100%; margin-top: 8px;
+        }
+        .control-group { background: #252525; padding: 10px; border-radius: 8px; margin-top: 15px; }
+        .btn {
+            width: 100%; padding: 15px; background: var(--neon); color: black;
+            border: none; font-weight: bold; font-family: 'Orbitron';
+            border-radius: 6px; cursor: pointer; margin-top: 20px;
+        }
+        .score-ctrl { display: flex; gap: 5px; margin-top: 10px; }
+        .score-ctrl button { flex: 1; padding: 5px; cursor: pointer; background: #333; color: white; border: 1px solid #555; border-radius: 4px; font-size: 0.8rem; }
+        .score-ctrl button.active { background: var(--neon); color: black; border-color: white; }
+
+        /* --- UI OVERLAY --- */
+        #overlay-ui {
+            display: none; width: 100vw; height: 100vh;
+            background: transparent; position: absolute; top: 0; left: 0;
+        }
+        .team-container {
+            position: absolute; display: flex; flex-direction: column; align-items: center;
+        }
+        .esports-text {
+            font-family: 'Orbitron', sans-serif; 
+            color: white;
+            text-shadow: 0 0 10px var(--neon), 0 0 20px var(--neon);
+            white-space: nowrap; font-weight: bold;
+        }
+        
+        /* LAMPU SKOR */
+        .lamp-row { display: flex; gap: 5px; margin-top: 5px; }
+        .lamp { width: 18px; height: 8px; background: rgba(0,0,0,0.5); border: 1px solid #444; }
+        .lamp.on { background: var(--neon); box-shadow: 0 0 10px var(--neon); border-color: white; }
+
+        .rgb-active { animation: rgbFlow 4s infinite linear; }
+        @keyframes rgbFlow { 0% { filter: hue-rotate(0deg); } 100% { filter: hue-rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="generator-ui">
+        <div class="card">
+            <h2 style="text-align:center; font-family:'Orbitron'; color:var(--neon)">ADJUST & SCORE</h2>
+            
+            <label>Nama Kiri & Kanan</label>
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="t1" placeholder="Mariz">
+                <input type="text" id="t2" placeholder="Lapeww">
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <div class="score-ctrl" style="flex:1">
+                    <button id="btnL1" onclick="toggleL('L1')">WIN 1</button>
+                    <button id="btnL2" onclick="toggleL('L2')">WIN 2</button>
+                </div>
+                <div class="score-ctrl" style="flex:1">
+                    <button id="btnR1" onclick="toggleL('R1')">WIN 1</button>
+                    <button id="btnR2" onclick="toggleL('R2')">WIN 2</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Posisi Atas/Bawah (Vertical)</label>
+                <input type="range" id="posY" min="0" max="200" value="50">
+                
+                <label>Jarak Ke Tengah (Horizontal)</label>
+                <input type="range" id="posX" min="0" max="50" value="22">
+                
+                <label>Ukuran Teks</label>
+                <input type="range" id="fSize" min="10" max="80" value="30">
+            </div>
+
+            <div class="control-group">
+                <label>Warna & Font</label>
+                <input type="color" id="color" value="#00ff41" style="height:40px;">
+                <input type="checkbox" id="rgbMode"> Mode RGB
+                <input type="file" id="fontFile" accept=".ttf, .otf">
+            </div>
+
+            <button class="btn" onclick="generateLink()">SALIN LINK BARU</button>
+            <div id="result-link" style="display:none; margin-top:15px; word-break:break-all; font-size:0.7rem; color:var(--neon)">
+                Link berhasil disalin!
+            </div>
+        </div>
+    </div>
+
+    <div id="overlay-ui">
+        <div id="animContainer">
+            <div class="team-container" id="cont1">
+                <span class="esports-text" id="dispText1"></span>
+                <div class="lamp-row">
+                    <div id="ovL1" class="lamp"></div>
+                    <div id="ovL2" class="lamp"></div>
+                </div>
+            </div>
+            <div class="team-container" id="cont2">
+                <span class="esports-text" id="dispText2"></span>
+                <div class="lamp-row">
+                    <div id="ovR1" class="lamp"></div>
+                    <div id="ovR2" class="lamp"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let base64Font = "";
+        let lamps = { L1:0, L2:0, R1:0, R2:0 };
+
+        function toggleL(id) {
+            lamps[id] = lamps[id] === 0 ? 1 : 0;
+            document.getElementById('btn'+id).classList.toggle('active');
+        }
+
+        document.getElementById('fontFile').addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => { base64Font = e.target.result.split(',')[1]; };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('t1')) {
+            document.getElementById('generator-ui').style.display = 'none';
+            document.getElementById('overlay-ui').style.display = 'block';
+            document.body.style.background = 'transparent';
+
+            const col = params.get('c');
+            const y = params.get('y');
+            const x = params.get('x');
+            const s = params.get('s');
+            const fontData = params.get('font');
+            const sData = params.get('sc') || "0000"; // Format L1L2R1R2
+
+            document.getElementById('dispText1').innerText = params.get('t1');
+            document.getElementById('dispText2').innerText = params.get('t2');
+            document.documentElement.style.setProperty('--neon', '#' + col);
+
+            const c1 = document.getElementById('cont1');
+            const c2 = document.getElementById('cont2');
+            const t1 = document.getElementById('dispText1');
+            const t2 = document.getElementById('dispText2');
+            
+            // Terapkan Gaya & Posisi
+            c1.style.top = y + 'px'; c1.style.left = x + '%'; t1.style.fontSize = s + 'px';
+            c2.style.top = y + 'px'; c2.style.right = x + '%'; t2.style.fontSize = s + 'px';
+
+            // Terapkan Lampu
+            if(sData[0] === "1") document.getElementById('ovL1').classList.add('on');
+            if(sData[1] === "1") document.getElementById('ovL2').classList.add('on');
+            if(sData[2] === "1") document.getElementById('ovR1').classList.add('on');
+            if(sData[3] === "1") document.getElementById('ovR2').classList.add('on');
+
+            if (params.get('rgb') === '1') document.getElementById('animContainer').classList.add('rgb-active');
+
+            if (fontData) {
+                const fontCss = document.createElement('style');
+                fontCss.innerHTML = `@font-face { font-family: 'Custom'; src: url(data:font/ttf;base64,${fontData}); } .esports-text { font-family: 'Custom' !important; }`;
+                document.head.appendChild(fontCss);
+            }
+        }
+
+        async function generateLink() {
+            const t1 = document.getElementById('t1').value || 'Mariz';
+            const t2 = document.getElementById('t2').value || 'Lapeww';
+            const col = document.getElementById('color').value.replace('#', '');
+            const rgb = document.getElementById('rgbMode').checked ? '1' : '0';
+            const y = document.getElementById('posY').value;
+            const x = document.getElementById('posX').value;
+            const s = document.getElementById('fSize').value;
+            const sc = `${lamps.L1}${lamps.L2}${lamps.R1}${lamps.R2}`;
+            
+            const baseUrl = window.location.href.split('?')[0];
+            let finalLink = `${baseUrl}?t1=${encodeURIComponent(t1)}&t2=${encodeURIComponent(t2)}&c=${col}&rgb=${rgb}&y=${y}&x=${x}&s=${s}&sc=${sc}`;
+            
+            if (base64Font) finalLink += `&font=${encodeURIComponent(base64Font)}`;
+
+            navigator.clipboard.writeText(finalLink);
+            document.getElementById('result-link').style.display = 'block';
+            alert("Link Berhasil Disalin! Tempel di Prism.");
+        }
+    </script>
+</body>
+</html>
